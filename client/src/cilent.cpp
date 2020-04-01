@@ -8,7 +8,7 @@
 
 using namespace std;
 
-#define MAX_SIZE 10
+#define MAX_SIZE 30
 #define ONE_PAGE 4096
 struct FileHead
 {
@@ -56,32 +56,6 @@ int main()
 
 }
 
-/*void RecvFile() {
-	cout << "start recv!" << endl;
-	const int bufferSize = 1024;
-	char buffer[bufferSize] = { 0 };
-	int readLen = 0;
-	string desFileName = "new_in";
-	ofstream desFile;
-	desFile.open(desFileName.c_str(), ios::binary);
-	if (!desFile)
-	{
-		return;
-	}
-	do
-	{
-		readLen = recv(m_Client, buffer, bufferSize, 0);
-		if (readLen == 0)
-		{
-			break;
-		}
-		else
-		{
-			desFile.write(buffer, readLen);
-		}
-	} while (true);
-	desFile.close();
-}*/
 void RecvFile() {
 	char str[1024] = { 0 };
 	int nlen;
@@ -104,11 +78,14 @@ void RecvFile() {
 	while (FileSize)
 	{
 		len = recv(m_Client, content, ONE_PAGE, 0);
-		if (len > 0)
-		{
-			fs.write(content, len);
-			FileSize -= len;
+		if (len < 0) {
+			cout << "传输失败";
+			break;
 		}
+		fs.write(content, len);
+		FileSize -= len;
+		cout << "传输成功！请注意查收！\n";
 	}
+	system("pause");
 	fs.close();
 }

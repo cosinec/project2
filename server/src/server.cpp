@@ -113,7 +113,7 @@ void SendFile() {
 			//if(len == 0 ) break;
 			send(m_Client, szBuf, len, 0);
 		}
-		cout << "成功发送！请接收了再继续";
+		cout << "成功发送！请接收了再继续\n";
 		system("pause");
 	}
 	//3.关闭文件流
