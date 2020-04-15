@@ -2,82 +2,102 @@
 #include <iostream>
 #include <cstring>
 #include <fstream>
-#include <winsock2.h>
 #include <vector>
 #ifdef linux
 #include <unistd.h>
 #include <dirent.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <arpa/inet.h>
+#define SOCKET int
 #endif
-#ifdef WIN32
+
+#ifdef _WIN32
+#include <winsock2.h>
 #include <direct.h>
 #include <io.h>
-#endif
 #pragma comment(lib, "ws2_32.lib")//socket库文件
+#endif
 
 using namespace std;
 
-
-#define MAX_SIZE 30
-#define ONE_PAGE 1024
+#define MAX_PATH 260
+#define MAX_SIZE 50
+#define ONE_PAGE 262144//256*1024
 
 struct FileHead
 {
-	char str[260];
+	char str[MAX_PATH];
 	int size;
 };
 
 SOCKET m_Client;
-void SendFile();
-bool getFiles(char*);
+void SendFile();//发送文件夹内所有文件
+bool getFiles(char*);//获得文件信息
+void closeSocket();//关闭m_Client
 vector<string> files;//存放文件路径
 vector<string> folders;//存放文件夹路径
 
 int main()
 {
 	cout << "client端" << endl;
+#ifdef _WIN32
 	WORD sockVersion = MAKEWORD(2, 2);
 	WSADATA data;
 	if (WSAStartup(sockVersion, &data) != 0)
 	{
 		return 0;
 	}
-	//while(true){
-	m_Client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (m_Client == INVALID_SOCKET)
+#endif
+
+	m_Client = socket(AF_INET, SOCK_STREAM, 0);
+	if (m_Client == 0)
 	{
 		printf("invalid socket!");
-		return 0;
+		exit(-1);
 	}
 
-	sockaddr_in serAddr;
+	struct sockaddr_in serAddr;
 	serAddr.sin_family = AF_INET;
 	serAddr.sin_port = htons(8888);//需要监听的端口
-
-	serAddr.sin_addr.S_un.S_addr = inet_addr("192.168.0.104");//需要绑定到本地的哪个IP地址
-	if (connect(m_Client, (sockaddr *)&serAddr, sizeof(serAddr)) == SOCKET_ERROR)
+#ifdef _WIN32
+	serAddr.sin_addr.S_un.S_addr = inet_addr("192.168.1.109");
+#elif linux
+	serAddr.sin_addr.s_addr = inet_addr("192.168.1.105");//需要绑定到本地的哪个IP地址
+#endif
+	if (connect(m_Client, (struct sockaddr *)&serAddr, sizeof(serAddr)) == -1)
 	{  //连接失败 
-		printf("connect error !");
-		closesocket(m_Client);
+		cout << "connect error !" << endl;
+		closeSocket();
 		return 0;
 	}
-	else printf("connect successfully!Preparing for sending file...\n");
+	else
+		printf("connect successfully!Preparing for sending file...\n");
 	SendFile();
-	closesocket(m_Client);//关闭监听socket
-
+	closeSocket();
+#ifdef _WIN32
 	WSACleanup();//卸载
-	system("pause");
+#endif
 	return 0;
+}
 
+void closeSocket()
+{
+#ifdef _WIN32
+	closesocket(m_Client);//关闭监听socket
+#elif linux
+	close(m_Client);
+#endif
 }
 
 /*获取文件内的所有文件路径（包括子文件夹）*/
 bool getFiles(char* path)
 {
-	char folderPath[MAX_SIZE];
-	char subFolderPath[MAX_SIZE];
-	char filePath[MAX_SIZE];
+	char subFolderPath[MAX_PATH];
+	char filePath[MAX_PATH];
 
-#ifdef WIN32
+#ifdef _WIN32
+	char folderPath[MAX_SIZE];
 	_finddata_t file;
 	intptr_t lf;
 	sprintf_s(folderPath, "%s*", path);
@@ -95,9 +115,9 @@ bool getFiles(char* path)
 			if (file.attrib&_A_SUBDIR)
 			{
 				//cout << file.name << endl;
-				folders.push_back(file.name);
 				strcpy(subFolderPath, path);
 				strcat(subFolderPath, file.name);
+				folders.push_back(subFolderPath);
 				strcat(subFolderPath, "\\");
 				getFiles(subFolderPath);
 			}
@@ -113,14 +133,10 @@ bool getFiles(char* path)
 	_findclose(lf);
 #endif
 
-	//linux还没写好
 #ifdef linux
 	DIR *dir;
 	struct dirent *ptr;
-	sprintf_s(folderPath, "%s*", path);
-	char base[1000];
-
-	if ((dir = opendir(folderPath)) == NULL)
+	if ((dir = opendir(path)) == NULL)
 	{
 		perror("Open dir error...");
 		return false;
@@ -128,22 +144,29 @@ bool getFiles(char* path)
 
 	while ((ptr = readdir(dir)) != NULL)
 	{
-		if (strcmp(ptr->d_name, ".") == 0 || strcmp(ptr->d_name, "..") == 0)    ///current dir OR parrent dir
+		memset(filePath, '\0', sizeof(filePath));
+		if (strcmp(ptr->d_name, ".") == 0 || strcmp(ptr->d_name, "..") == 0)
 			continue;
-		else if (ptr->d_type == 8)    ///file
-			printf("d_name:%s/%s\n", basePath, ptr->d_name);
-		files.push_back(ptr->d_name);
-		else if (ptr->d_type == 10)    ///link file
-			printf("d_name:%s/%s\n", basePath, ptr->d_name);
-		continue;
-		else if (ptr->d_type == 4)    ///dir
+		else if (ptr->d_type == 8) //file
 		{
-			memset(base, '\0', sizeof(base));
-			strcpy(base, basePath);
-			strcat(base, "/");
-			strcat(base, ptr->d_nSame);
-			readFileList(base);
-
+			cout << "filepath:" << path << ptr->d_name << endl;
+			strcpy(filePath, path);
+			strcat(filePath, ptr->d_name);
+			files.push_back(filePath);
+		}
+		else if (ptr->d_type == 10)    //link file
+		{
+			cout << "filepath:" << path << ptr->d_name << endl;
+			continue;
+		}
+		else if (ptr->d_type == 4)    //文件夹
+		{
+			memset(subFolderPath, '\0', sizeof(subFolderPath));
+			strcpy(subFolderPath, path);
+			strcat(subFolderPath, ptr->d_name);
+			folders.push_back(subFolderPath);
+			strcat(subFolderPath, "/");
+			getFiles(subFolderPath);
 		}
 	}
 	closedir(dir);
@@ -152,33 +175,42 @@ bool getFiles(char* path)
 }
 
 void SendFile() {
-	char path[260] = { 0 };
-	cout << "请输入文件路径" << endl;
+	char path[MAX_PATH] = { 0 };
+	cout << "Please enter the folder path:" << endl;
 	cin >> path;
+#ifdef _WIN32
 	strcat(path, "\\");
+#elif linux
+	strcat(path, "/");
+#endif
 	getFiles(path);
 	int pathLen = strlen(path);//文件夹路径长度 格式d:\\xx\\xx\\
-
-	//发送文件夹个数和文件个数
+							   							   //发送文件夹个数和文件个数
 	int foldersNum = folders.size();
 	send(m_Client, (char*)&foldersNum, sizeof(foldersNum), 0);
 	int filesNum = files.size();
 	send(m_Client, (char*)&filesNum, sizeof(filesNum), 0);
-
 	//如果收到的为yes
 	char  szResult[MAX_SIZE] = { 0 };
 	recv(m_Client, szResult, sizeof(szResult), 0);
+
 	if (0 == strcmp(szResult, "yes"))
 	{
 		//传输文件夹名称
+		//文件夹名/文件夹名
 		for (int i = 0; i < foldersNum; i++)
 		{
-			send(m_Client, folders[i].c_str(), 10, 0);
+			char* ptemp = const_cast<char*>(folders[i].c_str());//把string转换成char*
+			for (int i = 0; i < pathLen; i++)
+				*ptemp++;
+
+			send(m_Client, ptemp, MAX_SIZE / 2, 0);//不想浪费空间
 		}
 
 		for (int i = 0; i < filesNum; i++)
 		{
-			//截取需要的文件路径部分
+			/*截取需要的文件路径部分
+			文件夹名/文件.txt*/
 			char* ptemp = const_cast<char*>(files[i].c_str());//把string转换成char*
 			for (int i = 0; i < pathLen; i++)
 				*ptemp++;
@@ -204,11 +236,12 @@ void SendFile() {
 				if (len == 0) break;
 				send(m_Client, szBuf, len, 0);
 			}
-
 			//关闭文件流
 			fs.close();
 		}
 	}
-	cout << "发送完成!请注意查收!" << endl;
+	cout << "The transfer was successful! Please check" << endl;
+#ifdef _WIN32
 	system("pause");
+#endif
 }
