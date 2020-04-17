@@ -1,4 +1,4 @@
-#include <stdio.h>
+Ôªø#include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
 #include <string.h>
@@ -33,14 +33,18 @@ struct FileHead
 	int size;
 };
 
-SOCKET m_Client;
+//‰º†ËæìÊñá‰ª∂Áä∂ÊÄÅ
+enum status{Success, Interrupt}s;
 
-void RecvFile();
+SOCKET m_Client;
+int flag = 0;
+
+bool RecvFile();
 
 int main(int argc, char* argv[])
 {
-	//≥ı ºªØWSA  
-	cout << "server∂À" << endl;
+	//ÂàùÂßãÂåñWSA  
+	cout << "serverÁ´Ø" << endl;
 #ifdef _WIN32
 	const char on = 0;
 	WORD sockVersion = MAKEWORD(2, 2);
@@ -50,7 +54,7 @@ int main(int argc, char* argv[])
 		return 0;
 	}
 
-	//¥¥Ω®Ã◊Ω”◊÷  
+	//ÂàõÂª∫Â•óÊé•Â≠ó  
 	SOCKET slisten = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (slisten == INVALID_SOCKET)
 	{
@@ -60,7 +64,7 @@ int main(int argc, char* argv[])
 #elif linux
 	int on = 1;
 	int slisten;
-	//¥¥Ω®Ã◊Ω”◊÷
+	//ÂàõÂª∫Â•óÊé•Â≠ó
 	slisten = socket(PF_INET, SOCK_STREAM,0);
 	if (slisten < 0)
 	{
@@ -73,28 +77,28 @@ int main(int argc, char* argv[])
 		cout << "setsockopt failed " << endl;
 		exit(-1);
 	}
-	//∞Û∂®IP∫Õ∂Àø⁄  
+	//ÁªëÂÆöIPÂíåÁ´ØÂè£  
 	struct sockaddr_in sin;
 	sin.sin_family = AF_INET;
-	sin.sin_port = htons(8888);//–Ë“™º‡Ã˝µƒ∂Àø⁄
+	sin.sin_port = htons(8888);//ÈúÄË¶ÅÁõëÂê¨ÁöÑÁ´ØÂè£
 							   //sin.sin_addr.S_un.S_addr = INADDR_ANY;
 #ifdef _WIN32
-	sin.sin_addr.S_un.S_addr = inet_addr("192.168.1.109");//–Ë“™∞Û∂®µΩ±æµÿµƒƒƒ∏ˆIPµÿ÷∑
+	sin.sin_addr.S_un.S_addr = inet_addr("192.168.101.7");//ÈúÄË¶ÅÁªëÂÆöÂà∞Êú¨Âú∞ÁöÑÂì™‰∏™IPÂú∞ÂùÄ
 #elif linux
-	sin.sin_addr.s_addr = inet_addr("192.168.1.105");//–Ë“™∞Û∂®µΩ±æµÿµƒƒƒ∏ˆIPµÿ÷∑
+	sin.sin_addr.s_addr = inet_addr("192.168.1.105");//ÈúÄË¶ÅÁªëÂÆöÂà∞Êú¨Âú∞ÁöÑÂì™‰∏™IPÂú∞ÂùÄ
 #endif
-	if (bind(slisten, (struct sockaddr *)&sin, sizeof(sin)) == -1)//Ω¯––∞Û∂®∂Ø◊˜
+	if (bind(slisten, (struct sockaddr *)&sin, sizeof(sin)) == -1)//ËøõË°åÁªëÂÆöÂä®‰Ωú
 	{
 		cout << "bind error !" << endl;
 		exit(-1);
 	}
-	//ø™ ºº‡Ã˝  
+	//ÂºÄÂßãÁõëÂê¨  
 	if (listen(slisten, 5) == -1)
 	{
 		cout << "listen error !" << endl;
 		exit(-1);
 	}
-	//Ω” ’ ˝æ›  
+	//Êé•Êî∂Êï∞ÊçÆ  
 	struct sockaddr_in remoteAddr;
 #ifdef _WIN32
 	int nAddrlen = sizeof(remoteAddr);
@@ -102,21 +106,28 @@ int main(int argc, char* argv[])
 	socklen_t nAddrlen = sizeof(remoteAddr);
 #endif
 	char revData[255];
-	printf("Waiting for connection...\n");
-	m_Client = accept(slisten, (struct sockaddr *)&remoteAddr, &nAddrlen);//◊Ë»˚£¨÷±µΩ”––¬tcpøÕªß∂À¡¨Ω”
-	if (m_Client == -1)
+	printf("Á≠âÂæÖËøûÊé•...\n");
+	while (1)
 	{
-		cout << "accept error !" << endl;
-		exit(-1);
+		m_Client = accept(slisten, (struct sockaddr *)&remoteAddr, &nAddrlen);//ÈòªÂ°ûÔºåÁõ¥Âà∞ÊúâÊñ∞tcpÂÆ¢Êà∑Á´ØËøûÊé•
+		if (m_Client == -1)
+		{
+			cout << "accept error !" << endl;
+			exit(-1);
+		}
+		cout << "Êé•Êî∂Âà∞‰∏Ä‰∏™ËøûÊé•Ôºö" << inet_ntoa(remoteAddr.sin_addr) << endl;
+		cout << "ÂáÜÂ§á‰º†ËæìÊñá‰ª∂...\n";
+		flag = RecvFile();
+		if (flag)
+			break;
+		else
+			cout << "ÂÆ¢Êà∑Á´ØÊñ≠ÂºÄËøûÊé•ÔºåËØ∑Ê±ÇÈáçÊñ∞ËøûÊé•";
 	}
-	cout << "Received a connection£∫" << inet_ntoa(remoteAddr.sin_addr) << endl;
-	cout << "Preparing for receive file...\n";
-	RecvFile();
 	
 #ifdef _WIN32
-	closesocket(slisten);//πÿ±’º‡Ã˝socket
-	closesocket(m_Client);//πÿ±’socket
-	WSACleanup();//–∂‘ÿ
+	closesocket(slisten);//ÂÖ≥Èó≠ÁõëÂê¨socket
+	closesocket(m_Client);//ÂÖ≥Èó≠socket
+	WSACleanup();//Âç∏ËΩΩ
 #elif linux
 	close(slisten);
 	close(m_Client);
@@ -124,7 +135,7 @@ int main(int argc, char* argv[])
 	return 0;
 }
 
-//\∫Õ/µƒª•œ‡◊™ªª
+//\Âíå/ÁöÑ‰∫íÁõ∏ËΩ¨Êç¢
 void DealSlash(char* path)
 {
 #ifdef _WIN32
@@ -146,23 +157,23 @@ void DealSlash(char* path)
 #endif
 }
 
-void RecvFile() {
+bool RecvFile() {
 	int nlen;
-	int filesNum;//Œƒº˛∏ˆ ˝
-	int foldersNum;//Œƒº˛º–∏ˆ ˝
+	int filesNum;//Êñá‰ª∂‰∏™Êï∞
+	int foldersNum;//Êñá‰ª∂Â§π‰∏™Êï∞
 	FileHead fh;
 	//get numbers
 	recv(m_Client, (char*)&foldersNum, sizeof(foldersNum), 0);
 	recv(m_Client, (char*)&filesNum, sizeof(filesNum), 0);
 
-	//‘⁄øº¬« «∑Ò…æ»•
+	//Âú®ËÄÉËôëÊòØÂê¶Âà†Âéª
 	char str[MAX_SIZE] = { 0 };//'yes'
-	cout << "whether to receive files(yes/no)?" << endl;
+	cout << "ÊòØÂê¶Êé•Êî∂Êñá‰ª∂(yes/no)?" << endl;
 	cin >> str;
 	send(m_Client, str, sizeof(str), 0);
 
 	char szPath[MAX_PATH] = { 0 };
-	cout << "Please enter the saved path:" << endl;
+	cout << "ËØ∑ËæìÂÖ•Â≠òÂÇ®Ë∑ØÂæÑ:" << endl;
 	cin >> szPath;
 #ifdef _WIN32
 	strcat(szPath, "\\");
@@ -171,7 +182,7 @@ void RecvFile() {
 #endif
 	for (int i = 0; i < foldersNum; i++)
 	{
-		//ªÒµ√ÕÍ’˚Œƒº˛º–¬∑æ∂
+		//Ëé∑ÂæóÂÆåÊï¥Êñá‰ª∂Â§πË∑ØÂæÑ
 		char folderPath[MAX_PATH] = { 0 };
 		char folderName[MAX_SIZE/2] = { 0 };
 		recv(m_Client, folderName, MAX_SIZE/2, 0);
@@ -179,7 +190,7 @@ void RecvFile() {
 		DealSlash(folderName);
 		strcat(folderPath, folderName);
 
-		//≈–∂œŒƒº˛º– «∑Ò¥Ê‘⁄£¨≤ª¥Ê‘⁄‘Ú…˙≥…Œƒº˛º–
+		//Âà§Êñ≠Êñá‰ª∂Â§πÊòØÂê¶Â≠òÂú®Ôºå‰∏çÂ≠òÂú®ÂàôÁîüÊàêÊñá‰ª∂Â§π
 		if (0 != access(folderPath, 0))
 		{
 #ifdef _WIN32
@@ -192,13 +203,19 @@ void RecvFile() {
 	}
 	for (int i = 0; i < filesNum; i++)
 	{
-		nlen = recv(m_Client, (char*)&fh, sizeof(fh), 0);//ªÒµ√Œƒº˛–≈œ¢
+		nlen = recv(m_Client, (char*)&fh, sizeof(fh), 0);//Ëé∑ÂæóÊñá‰ª∂‰ø°ÊÅØ
+
+		//80%ÊòØÂõ†‰∏∫Êñ≠ÂºÄËøûÊé•
+		if (nlen == 0)
+			return false;
 		char szPathName[MAX_PATH] = { 0 };
 		DealSlash(fh.str);
-		sprintf(szPathName, "%s%s", szPath, fh.str);//∆¥Ω”¬∑æ∂∫ÕŒƒº˛√˚
-		cout << szPathName << endl;
+		sprintf(szPathName, "%s%s", szPath, fh.str);//ÊãºÊé•Ë∑ØÂæÑÂíåÊñá‰ª∂Âêç
+
+		//ËæìÂá∫Ê≠£Âú®Êé•ÂèóÁöÑÊñá‰ª∂Ë∑ØÂæÑ
+		cout << szPathName;
 		fstream fs;
-		fs.open(szPathName, fstream::out | fstream::binary | fstream::trunc);//“‘ø’Œƒº˛µƒ–Œ Ω¥Úø™
+		fs.open(szPathName, fstream::out | fstream::binary | fstream::trunc);//‰ª•Á©∫Êñá‰ª∂ÁöÑÂΩ¢ÂºèÊâìÂºÄ
 		int FileSize = fh.size;
 		int len;
 		char content[ONE_PAGE] = { 0 };
@@ -208,15 +225,23 @@ void RecvFile() {
 				len = recv(m_Client, content, FileSize, 0);
 			else
 				len = recv(m_Client, content, ONE_PAGE, 0);
-			if (len < 0) {
-				cout << "¥´ ‰ ß∞‹";
-				exit(-1);
+
+			//80%ÊòØÂõ†‰∏∫Êñ≠ÂºÄËøûÊé•
+			if (len == 0) {
+				cout << "‰º†ËæìÂ§±Ë¥•" << endl;
+				s = Interrupt;
+				send(m_Client, (char*)&s, sizeof(s), 0);
+				return false;
 			}
+			s = Success;
+			send(m_Client, (char*)s, sizeof(s), 0);
 			fs.write(content, len);
 			FileSize -= len;
 		}
+		cout << "\tÊé•Êî∂ÂÆåÊàê!" << endl;
 		fs.close();
 	}
-	cout << "The transfer was successful! Please check!" << endl;
+	cout << "‰º†ËæìÊàêÂäü!ËØ∑Ê≥®ÊÑèÊü•Êî∂" << endl;
 	system("pause");
+	return true;
 }
