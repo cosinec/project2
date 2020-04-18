@@ -1,289 +1,663 @@
-ï»¿#include <stdio.h>
+#include <stdio.h>
+
+#include "md5.h"
+
 #include <iostream>
+
 #include <cstring>
+
 #include <fstream>
+
 #include <vector>
+
 #ifdef linux
+
 #include <unistd.h>
+
 #include <dirent.h>
+
 #include <sys/socket.h>
+
 #include <sys/types.h>
+
 #include <arpa/inet.h>
+
 #define SOCKET int
+
 #endif
 
+
+
 #ifdef _WIN32
+
 #include <winsock2.h>
+
 #include <direct.h>
+
 #include <io.h>
-#pragma comment(lib, "ws2_32.lib")//socketåº“æ–‡ä»¶
+
+#pragma comment(lib, "ws2_32.lib")//socket¿âÎÄ¼ş
+
 #endif
+
+
 
 using namespace std;
 
+
+
 #define MAX_PATH 260
+
 #define MAX_SIZE 50
+
 #define ONE_PAGE 262144//256*1024
 
+
+
 struct FileHead
+
 {
+
 	char str[MAX_PATH];
+
 	int size;
+
 };
+
+
 
 enum status { Success, Interrupt, noStatus }s;
 
+
+
 SOCKET m_Client;
-int host;//ç«¯å£å·
-char *addr;//åœ°å€
-bool SendFile();//å‘é€æ–‡ä»¶å¤¹å†…æ‰€æœ‰æ–‡ä»¶
-bool getFiles(char*);//è·å¾—æ–‡ä»¶ä¿¡æ¯
-void reconnect();//é‡æ–°è¿æ¥æœåŠ¡å™¨
-void closeSocket();//å…³é—­m_Client
-vector<string> files;//å­˜æ”¾æ–‡ä»¶è·¯å¾„
-vector<string> folders;//å­˜æ”¾æ–‡ä»¶å¤¹è·¯å¾„
+
+int host;//¶Ë¿ÚºÅ
+
+char* addr;//µØÖ·
+
+bool SendFile();//·¢ËÍÎÄ¼ş¼ĞÄÚËùÓĞÎÄ¼ş
+
+bool getFiles(char*);//»ñµÃÎÄ¼şĞÅÏ¢
+
+void reconnect();//ÖØĞÂÁ¬½Ó·şÎñÆ÷
+
+void closeSocket();//¹Ø±Õm_Client
+
+vector<string> files;//´æ·ÅÎÄ¼şÂ·¾¶
+
+vector<string> folders;//´æ·ÅÎÄ¼ş¼ĞÂ·¾¶
+
+string fileMD5[MAX_SIZE];//´æ·ÅÎÄ¼şµÄMD5Âë
 
 int main()
+
 {
-	cout << "clientç«¯" << endl;
+
+	cout << "client¶Ë" << endl;
+
 #ifdef _WIN32
+
 	WORD sockVersion = MAKEWORD(2, 2);
+
 	WSADATA data;
+
 	if (WSAStartup(sockVersion, &data) != 0)
+
 	{
+
 		return 0;
+
 	}
+
 #endif
 
+
+
 	m_Client = socket(AF_INET, SOCK_STREAM, 0);
+
 	if (m_Client == 0)
+
 	{
+
 		printf("invalid socket!");
+
 		exit(-1);
+
 	}
+
+
 
 	struct sockaddr_in serAddr;
+
 	serAddr.sin_family = AF_INET;
-	serAddr.sin_port = htons(8888);//éœ€è¦ç›‘å¬çš„ç«¯å£
+
+	serAddr.sin_port = htons(8888);//ĞèÒª¼àÌıµÄ¶Ë¿Ú
+
 #ifdef _WIN32
-	serAddr.sin_addr.S_un.S_addr = inet_addr("192.168.101.7");
+
+	serAddr.sin_addr.S_un.S_addr = inet_addr("192.168.0.101");
+
 #elif linux
-	serAddr.sin_addr.s_addr = inet_addr("192.168.1.105");//éœ€è¦ç»‘å®šåˆ°æœ¬åœ°çš„å“ªä¸ªIPåœ°å€
+
+	serAddr.sin_addr.s_addr = inet_addr("192.168.1.105");//ĞèÒª°ó¶¨µ½±¾µØµÄÄÄ¸öIPµØÖ·
+
 #endif
+
 	host = 8888;
-	addr = "192.168.101.7";
-	if (connect(m_Client, (struct sockaddr *)&serAddr, sizeof(serAddr)) == -1)
-	{  //è¿æ¥å¤±è´¥ 
-		cout << "è¿æ¥å¤±è´¥!" << endl;
+
+	addr = "192.168.0.101";
+
+	if (connect(m_Client, (struct sockaddr*) & serAddr, sizeof(serAddr)) == -1)
+
+	{  //Á¬½ÓÊ§°Ü 
+
+		cout << "Á¬½ÓÊ§°Ü!" << endl;
+
 		closeSocket();
+
 		return 0;
+
 	}
+
 	else
-		cout << "è¿æ¥æˆåŠŸ!å‡†å¤‡ä¼ è¾“æ–‡ä»¶!\n";
+
+		cout << "Á¬½Ó³É¹¦!×¼±¸´«ÊäÎÄ¼ş!\n";
+
 	SendFile();
+
 	closeSocket();
+
 #ifdef _WIN32
-	WSACleanup();//å¸è½½
+
+	WSACleanup();//Ğ¶ÔØ
+
 #endif
+
 	return 0;
+
 }
+
+
 
 void closeSocket()
+
 {
+
 #ifdef _WIN32
-	closesocket(m_Client);//å…³é—­ç›‘å¬socket
+
+	closesocket(m_Client);//¹Ø±Õ¼àÌısocket
+
 #elif linux
+
 	close(m_Client);
+
 #endif
+
 }
 
-//é‡æ–°è¿æ¥æœåŠ¡å™¨
+
+
+//ÖØĞÂÁ¬½Ó·şÎñÆ÷
+
 void reconnect()
+
 {
-	cout << "æœåŠ¡å™¨è¿æ¥ä¸­æ–­!é‡æ–°è¿æ¥!" << endl;
+
+	cout << "·şÎñÆ÷Á¬½ÓÖĞ¶Ï!ÖØĞÂÁ¬½Ó!" << endl;
+
 	closeSocket();
+
 	m_Client = socket(AF_INET, SOCK_STREAM, 0);
+
 	sockaddr_in serAddr;
+
 	serAddr.sin_family = AF_INET;
-	serAddr.sin_port = htons(host);//éœ€è¦ç›‘å¬çš„ç«¯å£
+
+	serAddr.sin_port = htons(host);//ĞèÒª¼àÌıµÄ¶Ë¿Ú
+
 #ifdef _WIN32
+
 	serAddr.sin_addr.S_un.S_addr = inet_addr(addr);
-	Sleep(5000);//å¾…æœºäº”ç§’
+
+	Sleep(5000);//´ı»úÎåÃë
+
 #elif linux
-	serAddr.sin_addr.s_addr = inet_addr("192.168.1.105");//éœ€è¦ç»‘å®šåˆ°æœ¬åœ°çš„å“ªä¸ªIPåœ°å€
-	Sleep(5);//å¾…æœºäº”ç§’
+
+	serAddr.sin_addr.s_addr = inet_addr("192.168.1.105");//ĞèÒª°ó¶¨µ½±¾µØµÄÄÄ¸öIPµØÖ·
+
+	Sleep(5);//´ı»úÎåÃë
+
 #endif
-	if (connect(m_Client, (struct sockaddr *)&serAddr, sizeof(serAddr)) == -1)
-	{  //è¿æ¥å¤±è´¥ 
-		cout << "è¿æ¥å¤±è´¥!" << endl;
+
+	if (connect(m_Client, (struct sockaddr*) & serAddr, sizeof(serAddr)) == -1)
+
+	{  //Á¬½ÓÊ§°Ü 
+
+		cout << "Á¬½ÓÊ§°Ü!" << endl;
+
 		closeSocket();
+
 		return;
+
 	}
-	cout << "é‡æ–°è¿æ¥æˆåŠŸ!";
+
+	cout << "ÖØĞÂÁ¬½Ó³É¹¦!";
+
 }
 
-/*è·å–æ–‡ä»¶å†…çš„æ‰€æœ‰æ–‡ä»¶è·¯å¾„ï¼ˆåŒ…æ‹¬å­æ–‡ä»¶å¤¹ï¼‰*/
+
+
+/*»ñÈ¡ÎÄ¼şÄÚµÄËùÓĞÎÄ¼şÂ·¾¶£¨°üÀ¨×ÓÎÄ¼ş¼Ğ£©*/
+
 bool getFiles(char* path)
+
 {
+
 	char subFolderPath[MAX_PATH];
+
 	char filePath[MAX_PATH];
 
+
+
 #ifdef _WIN32
+
 	char folderPath[MAX_SIZE];
+
 	_finddata_t file;
+
 	intptr_t lf;
+
 	sprintf_s(folderPath, "%s*", path);
-	//è¾“å…¥æ–‡ä»¶å¤¹è·¯å¾„
+
+	//ÊäÈëÎÄ¼ş¼ĞÂ·¾¶
+
 	if ((lf = _findfirst(folderPath, &file)) == -1) {
+
 		cout << folderPath << " not found!!!" << endl;
+
 		return false;
+
 	}
+
 	else {
+
 		do {
+
 			if (strcmp(file.name, ".") == 0 || strcmp(file.name, "..") == 0)
+
 				continue;
 
-			//æ˜¯æ–‡ä»¶å¤¹å°±é€’å½’è°ƒç”¨å‡½æ•°
-			if (file.attrib&_A_SUBDIR)
+
+
+			//ÊÇÎÄ¼ş¼Ğ¾Íµİ¹éµ÷ÓÃº¯Êı
+
+			if (file.attrib & _A_SUBDIR)
+
 			{
+
 				//cout << file.name << endl;
+
 				strcpy(subFolderPath, path);
+
 				strcat(subFolderPath, file.name);
+
 				folders.push_back(subFolderPath);
+
 				strcat(subFolderPath, "\\");
+
 				getFiles(subFolderPath);
+
 			}
-			//ä¿å­˜å®Œæ•´è·¯å¾„
+
+			//±£´æÍêÕûÂ·¾¶
+
 			else
+
 			{
+
 				sprintf_s(filePath, "%s%s", path, file.name);
+
 				//cout << filePath << endl;
+
 				files.push_back(filePath);
+
 			}
+
 		} while (_findnext(lf, &file) == 0);
+
 	}
+
 	_findclose(lf);
+
 #endif
+
+
 
 #ifdef linux
-	DIR *dir;
-	struct dirent *ptr;
+
+	DIR* dir;
+
+	struct dirent* ptr;
+
 	if ((dir = opendir(path)) == NULL)
+
 	{
+
 		perror("Open dir error...");
+
 		return false;
+
 	}
 
+
+
 	while ((ptr = readdir(dir)) != NULL)
+
 	{
+
 		memset(filePath, '\0', sizeof(filePath));
+
 		if (strcmp(ptr->d_name, ".") == 0 || strcmp(ptr->d_name, "..") == 0)
+
 			continue;
+
 		else if (ptr->d_type == 8) //file
+
 		{
+
 			//cout << "filepath:" << path << ptr->d_name << endl;
+
 			strcpy(filePath, path);
+
 			strcat(filePath, ptr->d_name);
+
 			files.push_back(filePath);
+
 		}
+
 		else if (ptr->d_type == 10)    //link file
+
 		{
+
 			//cout << "filepath:" << path << ptr->d_name << endl;
+
 			continue;
+
 		}
-		else if (ptr->d_type == 4)    //æ–‡ä»¶å¤¹
+
+		else if (ptr->d_type == 4)    //ÎÄ¼ş¼Ğ
+
 		{
+
 			memset(subFolderPath, '\0', sizeof(subFolderPath));
+
 			strcpy(subFolderPath, path);
+
 			strcat(subFolderPath, ptr->d_name);
+
 			folders.push_back(subFolderPath);
+
 			strcat(subFolderPath, "/");
+
 			getFiles(subFolderPath);
+
 		}
+
 	}
+
 	closedir(dir);
+
 #endif
+
 	return true;
+
+}
+
+//»ñÈ¡ÎÄ¼şµÄMD5Âë
+string FileDigest(const string& file)
+
+{
+
+	ifstream in(file.c_str());
+
+	if (!in)
+
+		return "";
+
+
+
+	MD5 md5;
+
+	std::streamsize length;
+
+	char buffer[1024];
+
+	while (!in.eof()) {
+
+		in.read(buffer, 1024);
+
+		length = in.gcount();
+
+		if (length > 0)
+
+			md5.update(buffer, length);
+
+	}
+
+	in.close();
+
+	return md5.toString();
+
 }
 
 bool SendFile() {
+
 	int rec;
+
+	int equelFlag=0;
+
 	s = noStatus;
+
 	char path[MAX_PATH] = { 0 };
-	cout << "è¯·è¾“å…¥æ–‡ä»¶è·¯å¾„:" << endl;
+
+	cout << "ÇëÊäÈëÎÄ¼şÂ·¾¶:" << endl;
+
 	cin >> path;
+
 #ifdef _WIN32
+
 	strcat(path, "\\");
+
 #elif linux
+
 	strcat(path, "/");
+
 #endif
+
 	getFiles(path);
-	int pathLen = strlen(path);//æ–‡ä»¶å¤¹è·¯å¾„é•¿åº¦ æ ¼å¼d:\\xx\\xx\\
-							   							   //å‘é€æ–‡ä»¶å¤¹ä¸ªæ•°å’Œæ–‡ä»¶ä¸ªæ•°
+
+	int pathLen = strlen(path);//ÎÄ¼ş¼ĞÂ·¾¶³¤¶È ¸ñÊ½d:\\xx\\xx\\
+
+														   //·¢ËÍÎÄ¼ş¼Ğ¸öÊıºÍÎÄ¼ş¸öÊı
+
 	int foldersNum = folders.size();
+
 	send(m_Client, (char*)&foldersNum, sizeof(foldersNum), 0);
+
 	int filesNum = files.size();
+
 	send(m_Client, (char*)&filesNum, sizeof(filesNum), 0);
-	//å¦‚æœæ”¶åˆ°çš„ä¸ºyes
+
+	//Èç¹ûÊÕµ½µÄÎªyes
+
 	char  szResult[MAX_SIZE] = { 0 };
+
 	recv(m_Client, szResult, sizeof(szResult), 0);
 
+	string severMD5[MAX_SIZE];
+
+	char severNum[MAX_SIZE] = { 0 };
+
+	int severFileNum = 0;
+
 	if (0 == strcmp(szResult, "yes"))
+
 	{
-		//ä¼ è¾“æ–‡ä»¶å¤¹åç§°
-		//æ–‡ä»¶å¤¹å/æ–‡ä»¶å¤¹å
-		for (int i = 0; i < foldersNum; i++)
+		recv(m_Client, severNum, sizeof(severNum), 0);
+
+		severFileNum = atoi(severNum);
+
+		cout <<"severFileNum:" <<severFileNum;
+
+		for(int i = 0;i < severFileNum;i++)
+
 		{
-			char* ptemp = const_cast<char*>(folders[i].c_str());//æŠŠstringè½¬æ¢æˆchar*
+			char serverMD5[33] = { 0 };
+
+			recv(m_Client, serverMD5, 32, 0);
+
+			severMD5[i] = serverMD5;
+
+			cout << "\nseverFileMD5Âë:" << severMD5[i];
+
+		}
+
+		cout << "\nMD5Âë½ÓÊÕÍê±Ï";
+
+		//´«ÊäÎÄ¼ş¼ĞÃû³Æ
+
+		//ÎÄ¼ş¼ĞÃû/ÎÄ¼ş¼ĞÃû
+
+		for (int i = 0; i < foldersNum; i++)
+
+		{
+
+			char* ptemp = const_cast<char*>(folders[i].c_str());//°Ñstring×ª»»³Échar*
+
 			for (int i = 0; i < pathLen; i++)
+
 				*ptemp++;
 
-			send(m_Client, ptemp, MAX_SIZE / 2, 0);//ä¸æƒ³æµªè´¹ç©ºé—´
+
+
+			send(m_Client, ptemp, MAX_SIZE / 2, 0);//²»ÏëÀË·Ñ¿Õ¼ä
+
 		}
 
 		for (int i = 0; i < filesNum; i++)
+
 		{
-			/*æˆªå–éœ€è¦çš„æ–‡ä»¶è·¯å¾„éƒ¨åˆ†
-			æ–‡ä»¶å¤¹å/æ–‡ä»¶.txt*/
-			char* ptemp = const_cast<char*>(files[i].c_str());//æŠŠstringè½¬æ¢æˆchar*
+
+			/*½ØÈ¡ĞèÒªµÄÎÄ¼şÂ·¾¶²¿·Ö
+
+			ÎÄ¼ş¼ĞÃû/ÎÄ¼ş.txt*/
+
+			char* ptemp = const_cast<char*>(files[i].c_str());//°Ñstring×ª»»³Échar*
+
 			for (int i = 0; i < pathLen; i++)
+
 				*ptemp++;
 
+			fileMD5[i] = FileDigest(files[i]);
+
+			for (int j = 0; j < severFileNum; j++)
+			{
+
+				if (fileMD5[i].compare(severMD5[j]) == 0)
+				{
+					equelFlag = 1;
+
+					break;
+				}
+
+				else equelFlag = 0;
+
+			}
+
+			if (equelFlag == 1)
+			{
+
+				cout << files[i].c_str() << "ÎÄ¼şÒÑ´æÔÚ£¡\n";
+
+				continue;
+
+			}
+
 			fstream fs;
+
 			fs.open(files[i], fstream::in | fstream::binary);
-			fs.seekg(0, fstream::end);//ä»¥æœ€åçš„ä½ç½®ä¸ºåŸºå‡†ä¸åç§»
-			int nlen = fs.tellg();//å–å¾—æ–‡ä»¶å¤§å°
+
+			fs.seekg(0, fstream::end);//ÒÔ×îºóµÄÎ»ÖÃÎª»ù×¼²»Æ«ÒÆ
+
+			int nlen = fs.tellg();//È¡µÃÎÄ¼ş´óĞ¡
+
 			fs.seekg(0, fstream::beg);
 
-			//å‘é€æ–‡ä»¶ä¿¡æ¯
+
+
+			//·¢ËÍÎÄ¼şĞÅÏ¢
+
 			FileHead fh;
+
 			fh.size = nlen;
+
 			memcpy(fh.str, ptemp, MAX_PATH);
+
 			nlen = send(m_Client, (char*)&fh, sizeof(fh), 0);
+
 			char szBuf[ONE_PAGE] = { 0 };
+
 			cout << files[i].c_str();
-			//è¯»æ–‡ä»¶
+
+			cout << "\nMD5Âë£º" << fileMD5[i].c_str();
+
+			//¶ÁÎÄ¼ş
+
 			while (!fs.eof())
+
 			{
+
 				fs.read(szBuf, ONE_PAGE);
+
 				int len = fs.gcount();
 
-				if (len == 0) 
+
+
+				if (len == 0)
+
 					return false;
+
 				send(m_Client, szBuf, len, 0);
+
 				rec = recv(m_Client, (char*)&s, sizeof(s), 0);
 
-				//æœåŠ¡å™¨è¿æ¥æ–­å¼€ï¼Œé‡æ–°è¿æ¥
+
+
+				//·şÎñÆ÷Á¬½Ó¶Ï¿ª£¬ÖØĞÂÁ¬½Ó
+
 				if (rec == 0)
+
 					reconnect();
+
 			}
-			cout << "\tä¼ è¾“å®Œæˆ!" << endl;
-			//å…³é—­æ–‡ä»¶æµ
+
+			cout << "\t´«ÊäÍê³É!" << endl;
+
+			//¹Ø±ÕÎÄ¼şÁ÷
+
 			fs.close();
+
 		}
-		cout << "æ‰€æœ‰æ–‡ä»¶ä¼ è¾“æˆåŠŸï¼Œè¯·æ³¨æ„æŸ¥æ”¶" << endl;
+
+		cout << "ËùÓĞÎÄ¼ş´«Êä³É¹¦£¬Çë×¢Òâ²éÊÕ" << endl;
+
 	}
+
 #ifdef _WIN32
+
 	system("pause");
+
 #endif
+
 }
