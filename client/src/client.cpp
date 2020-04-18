@@ -31,11 +31,11 @@ struct FileHead
 	int size;
 };
 
-enum status { Success, Interrupt }s;
+enum status { Success, Interrupt, noStatus }s;
 
 SOCKET m_Client;
-int host;
-char *addr;
+int host;//端口号
+char *addr;//地址
 bool SendFile();//发送文件夹内所有文件
 bool getFiles(char*);//获得文件信息
 void reconnect();//重新连接服务器
@@ -108,16 +108,18 @@ void reconnect()
 	serAddr.sin_port = htons(host);//需要监听的端口
 #ifdef _WIN32
 	serAddr.sin_addr.S_un.S_addr = inet_addr(addr);
+	Sleep(5000);//待机五秒
 #elif linux
 	serAddr.sin_addr.s_addr = inet_addr("192.168.1.105");//需要绑定到本地的哪个IP地址
+	Sleep(5);//待机五秒
 #endif
-	Sleep(1000);
 	if (connect(m_Client, (struct sockaddr *)&serAddr, sizeof(serAddr)) == -1)
 	{  //连接失败 
-		cout << "connect error !" << endl;
+		cout << "连接失败!" << endl;
 		closeSocket();
 		return;
 	}
+	cout << "重新连接成功!";
 }
 
 /*获取文件内的所有文件路径（包括子文件夹）*/
@@ -206,6 +208,7 @@ bool getFiles(char* path)
 
 bool SendFile() {
 	int rec;
+	s = noStatus;
 	char path[MAX_PATH] = { 0 };
 	cout << "请输入文件路径:" << endl;
 	cin >> path;
@@ -268,11 +271,11 @@ bool SendFile() {
 				if (len == 0) 
 					return false;
 				send(m_Client, szBuf, len, 0);
-				rec = recv(m_Client, (char*)s, sizeof(s), 0);
-				if (rec <= 0)
-				{
+				rec = recv(m_Client, (char*)&s, sizeof(s), 0);
+
+				//服务器连接断开，重新连接
+				if (rec == 0)
 					reconnect();
-				}
 			}
 			cout << "\t传输完成!" << endl;
 			//关闭文件流

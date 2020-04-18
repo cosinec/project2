@@ -234,7 +234,7 @@ bool RecvFile() {
 				return false;
 			}
 			s = Success;
-			send(m_Client, (char*)s, sizeof(s), 0);
+			send(m_Client, (char*)&s, sizeof(s), 0);
 			fs.write(content, len);
 			FileSize -= len;
 		}
