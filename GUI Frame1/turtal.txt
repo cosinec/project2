@@ -1,0 +1,13 @@
+﻿https://blog.csdn.net/clever101/article/details/100163301
+当把导入外部库的时候出现类似“sockaddr”: “struct”类型重定义的错误的解决办法
+由于wxWidgets和导入的socket相关库产生了重复定义了宏和一些函数名重复的问题出现大量报错。
+https://www.dazhuanlan.com/2020/03/26/5e7c91f2099c3/
+亲测可用的wxWidgets安装环境配置教程
+https://www.cnblogs.com/starf/p/3657149.html
+wxWidgets字符类型和其他类型转换(int/string/char *)。
+wxWidgets的TextCtrl字节流输入.
+https://docs.wxwidgets.org/trunk/classwx_log_text_ctrl.html
+官方文档：
+https://docs.wxwidgets.org/trunk/index.html
+Empty Frame.cpp 是空的GUI框架。
+ComputerNetworkP2GUI.cpp是做成的框架。
